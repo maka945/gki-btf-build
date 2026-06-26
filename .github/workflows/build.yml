@@ -30,14 +30,10 @@ jobs:
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
-      - name: Enable BTF
-        run: |
-          echo "CONFIG_DEBUG_INFO_BTF=y" >> kernel/common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEBUG_INFO_BTF_MODULES=y" >> kernel/common/arch/arm64/configs/gki_defconfig
-
-      - name: Build kernel
+      - name: Build kernel with BTF
         run: |
           cd kernel
+          export POST_DEFCONFIG_CMDS="scripts/config --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF --enable CONFIG_DEBUG_INFO_BTF_MODULES"
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
 
       - name: Upload boot images

@@ -1,4 +1,4 @@
-name: Build GKI android12-5.10 with BTF + KernelSU
+name: Build GKI BTF KernelSU
 
 on:
   workflow_dispatch:
@@ -6,13 +6,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git bc bison flex libssl-dev libelf-dev \
-            python3 python-is-python3 dwarves cpio kmod
+          sudo apt-get install -y git bc bison flex libssl-dev libelf-dev python3 python-is-python3 dwarves cpio kmod
 
       - name: Setup repo tool
         run: |
@@ -24,10 +22,7 @@ jobs:
       - name: Sync kernel source
         run: |
           mkdir kernel && cd kernel
-          repo init \
-            -u https://android.googlesource.com/kernel/manifest \
-            -b common-android12-5.10 \
-            --depth=1
+          repo init -u https://android.googlesource.com/kernel/manifest -b common-android12-5.10 --depth=1
           repo sync -j$(nproc) --no-tags --no-clone-bundle
 
       - name: Integrate KernelSU
@@ -37,9 +32,8 @@ jobs:
 
       - name: Enable BTF
         run: |
-          cd kernel
-          echo "CONFIG_DEBUG_INFO_BTF=y" >> common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_DEBUG_INFO_BTF_MODULES=y" >> common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_INFO_BTF=y" >> kernel/common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_INFO_BTF_MODULES=y" >> kernel/common/arch/arm64/configs/gki_defconfig
 
       - name: Build kernel
         run: |

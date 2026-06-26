@@ -1,0 +1,54 @@
+name: Build GKI android12-5.10 with BTF + KernelSU
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git bc bison flex libssl-dev libelf-dev \
+            python3 python-is-python3 dwarves cpio kmod
+
+      - name: Setup repo tool
+        run: |
+          mkdir -p ~/.local/bin
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/.local/bin/repo
+          chmod +x ~/.local/bin/repo
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Sync kernel source
+        run: |
+          mkdir kernel && cd kernel
+          repo init \
+            -u https://android.googlesource.com/kernel/manifest \
+            -b common-android12-5.10 \
+            --depth=1
+          repo sync -j$(nproc) --no-tags --no-clone-bundle
+
+      - name: Integrate KernelSU
+        run: |
+          cd kernel
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+
+      - name: Enable BTF
+        run: |
+          cd kernel
+          echo "CONFIG_DEBUG_INFO_BTF=y" >> common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_DEBUG_INFO_BTF_MODULES=y" >> common/arch/arm64/configs/gki_defconfig
+
+      - name: Build kernel
+        run: |
+          cd kernel
+          LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+
+      - name: Upload boot images
+        uses: actions/upload-artifact@v4
+        with:
+          name: gki-btf-boot
+          path: kernel/out/android12-5.10/dist/boot*.img
+          retention-days: 7

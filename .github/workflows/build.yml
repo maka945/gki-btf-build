@@ -10,7 +10,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git bc bison flex libssl-dev libelf-dev python3 python-is-python3 dwarves cpio kmod
+          sudo apt-get install -y git bc bison flex libssl-dev libelf-dev python3 python-is-python3 dwarves cpio kmod wget unzip
 
       - name: Setup repo tool
         run: |
@@ -36,9 +36,31 @@ jobs:
           export POST_DEFCONFIG_CMDS="scripts/config --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF --enable CONFIG_DEBUG_INFO_BTF_MODULES"
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
 
-      - name: Upload boot images
+      - name: Setup magiskboot
+        run: |
+          wget -q https://github.com/topjohnwu/Magisk/releases/download/v27.0/Magisk-v27.0.apk -O magisk.apk
+          unzip -q magisk.apk lib/x86_64/libmagiskboot.so -d magisk_tmp
+          cp magisk_tmp/lib/x86_64/libmagiskboot.so ./magiskboot
+          chmod +x ./magiskboot
+
+      - name: Download base boot-gz image
+        run: |
+          wget -q "https://github.com/tiann/KernelSU/releases/download/v0.9.5/android12-5.10.198_2024-01-boot-gz.img.gz" -O base_boot.img.gz
+          gunzip base_boot.img.gz
+          ls -lh base_boot.img
+
+      - name: Repack with new kernel
+        run: |
+          mkdir boot_work && cd boot_work
+          cp ../base_boot.img .
+          ../magiskboot unpack base_boot.img
+          cp ../kernel/out/android12-5.10/dist/Image kernel
+          ../magiskboot repack base_boot.img ../boot_btf_gz.img
+          ls -lh ../boot_btf_gz.img
+
+      - name: Upload boot image
         uses: actions/upload-artifact@v4
         with:
           name: gki-btf-boot
-          path: kernel/out/android12-5.10/dist/boot*.img
+          path: boot_btf_gz.img
           retention-days: 7

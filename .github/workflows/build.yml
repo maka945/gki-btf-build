@@ -30,18 +30,42 @@ jobs:
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
 
-      - name: Build kernel with BTF
+      - name: Build kernel (base GKI build)
         run: |
           cd kernel
-          SCRIPTS="${PWD}/common/scripts/config"
-          export POST_DEFCONFIG_CMDS="${SCRIPTS} --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF && ${SCRIPTS} --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF_MODULES && echo '[BTF] Enabled:' && grep CONFIG_DEBUG_INFO_BTF \${OUT_DIR}/.config"
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
 
-      - name: Verify BTF compiled in
+      - name: Inject BTF into built kernel
         run: |
-          OUTDIR=kernel/out/android12-5.10
-          echo "=== .config BTF section ==="
-          grep -E "DEBUG_INFO" ${OUTDIR}/.config || true
+          cd kernel
+          OUTDIR="${PWD}/out/android12-5.10/common"
+
+          echo "=== Pahole version ==="
+          pahole --version
+
+          echo "=== Enabling BTF in .config ==="
+          common/scripts/config --file ${OUTDIR}/.config --enable CONFIG_DEBUG_INFO_BTF
+          common/scripts/config --file ${OUTDIR}/.config --enable CONFIG_DEBUG_INFO_BTF_MODULES
+          grep "CONFIG_DEBUG_INFO_BTF" ${OUTDIR}/.config
+
+          echo "=== Running olddefconfig to validate dependencies ==="
+          export PATH="${PWD}/prebuilts-master/clang/host/linux-x86/clang-r416183b/bin:${PWD}/prebuilts/build-tools/linux-x86/bin:${PWD}/prebuilts/gas/linux-x86:/usr/bin:/usr/local/bin:${PATH}"
+          make ARCH=arm64 O=${OUTDIR} LLVM=1 LLVM_IAS=1 DEPMOD=depmod DTC=dtc -C common olddefconfig
+
+          echo "=== Verifying BTF survived olddefconfig ==="
+          grep "CONFIG_DEBUG_INFO_BTF=y" ${OUTDIR}/.config || { echo "FATAL: BTF removed by olddefconfig"; exit 1; }
+          echo "BTF CONFIG OK"
+
+          echo "=== Rebuilding Image with BTF (pahole encoding + relink only) ==="
+          make ARCH=arm64 O=${OUTDIR} LLVM=1 LLVM_IAS=1 DEPMOD=depmod DTC=dtc -C common -j$(nproc) Image
+
+          echo "=== Updating dist Image ==="
+          cp ${OUTDIR}/arch/arm64/boot/Image out/android12-5.10/dist/Image
+          ls -lh out/android12-5.10/dist/Image
+
+      - name: Verify BTF in final kernel
+        run: |
+          OUTDIR=kernel/out/android12-5.10/common
           grep "CONFIG_DEBUG_INFO_BTF=y" ${OUTDIR}/.config || { echo "FATAL: CONFIG_DEBUG_INFO_BTF not compiled in!"; exit 1; }
           echo "BTF VERIFIED OK"
 

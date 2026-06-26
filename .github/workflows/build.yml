@@ -33,8 +33,17 @@ jobs:
       - name: Build kernel with BTF
         run: |
           cd kernel
-          export POST_DEFCONFIG_CMDS="scripts/config --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF --enable CONFIG_DEBUG_INFO_BTF_MODULES"
+          SCRIPTS="${PWD}/common/scripts/config"
+          export POST_DEFCONFIG_CMDS="${SCRIPTS} --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF && ${SCRIPTS} --file \${OUT_DIR}/.config --enable CONFIG_DEBUG_INFO_BTF_MODULES && echo '[BTF] Enabled:' && grep CONFIG_DEBUG_INFO_BTF \${OUT_DIR}/.config"
           LTO=thin BUILD_CONFIG=common/build.config.gki.aarch64 build/build.sh
+
+      - name: Verify BTF compiled in
+        run: |
+          OUTDIR=kernel/out/android12-5.10
+          echo "=== .config BTF section ==="
+          grep -E "DEBUG_INFO" ${OUTDIR}/.config || true
+          grep "CONFIG_DEBUG_INFO_BTF=y" ${OUTDIR}/.config || { echo "FATAL: CONFIG_DEBUG_INFO_BTF not compiled in!"; exit 1; }
+          echo "BTF VERIFIED OK"
 
       - name: Setup magiskboot
         run: |
